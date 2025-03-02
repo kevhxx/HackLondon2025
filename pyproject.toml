@@ -27,4 +27,5 @@ dependencies = [
     "starlette>=0.46.0",
     "tsfresh>=0.21.0",
     "uvicorn>=0.34.0",
+    "xgboost>=2.1.4",
 ]

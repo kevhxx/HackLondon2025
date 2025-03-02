@@ -3,26 +3,31 @@ import numpy as np
 import multiprocessing
 import os
 import cloudpickle
+import joblib
+import polars as pl
+
+from src.utils.xgb import X_train
 
 # 加载保存的模型
-print("Loading model..." + "    " + os.path.join(os.path.dirname(__file__), 'trained_model.pkl'))
-saved_data = cloudpickle.load(open(os.path.join(os.path.dirname(__file__), 'trained_model.pkl'), 'rb'))
-model = saved_data['model']
-train_median = saved_data['train_median']
-feature_columns = saved_data['feature_columns']
+print("Loading model..." + "    " + os.path.join(os.path.dirname(__file__), 'xgboost_model.pkl'))
+saved_data = cloudpickle.load(open(os.path.join(os.path.dirname(__file__), 'xgboost_model.pkl'), 'rb'))
+# model = saved_data['model']
+# train_median = saved_data['train_median']
+# feature_columns = saved_data['feature_columns']
 
 # 用户输入示例（需包含部分特征）
 # If you want to specifically select only these columns
 columns = [
-    'ID', 'SEX', 'AGE', 'ACC', 'ACC_DAYS',
+    'SEX', 'AGE', 'ACC', 'ACC_DAYS',
     'HRV_HOURS', 'CPT_II', 'ADD', 'BIPOLAR', 'UNIPOLAR',
     'ANXIETY', 'SUBSTANCE', 'OTHER', 'CT', 'MDQ_POS', 'WURS',
     'ASRS', 'MADRS', 'HADS_A', 'HADS_D', 'MED', 'MED_Antidepr',
     'MED_Moodstab', 'MED_Antipsych', 'MED_Anxiety_Benzo', 'MED_Sleep',
-    'MED_Analgesics_Opioids', 'MED_Stimulants', 'filter_$'
+    'MED_Analgesics_Opioids', 'MED_Stimulants', 'HRV'
 ]
 
 multiprocessing.freeze_support()
+
 
 # Read CSV with specific columns
 # os.getcwd() 的上一层目录的 data/patient_info_processed.csv
@@ -105,24 +110,37 @@ def predict_new_sample(model, user_input_df, train_median, feature_columns):
 # - 阴性概率：{proba[0]:.1%}
 # - 阳性概率：{proba[1]:.1%}
 # """)
+#
+# async def do_prediction(df: pd.DataFrame) -> list[float]:
+#     proba = predict_new_sample(model, df, train_median, feature_columns)
+#     # print(f"""
+#     # 预测结果：
+#     # - 阴性概率：{proba[0]:.1%}
+#     # - 阳性概率：{proba[1]:.1%}
+#     # """)
+#     return proba
+
+model = joblib.load(os.path.join(os.path.dirname(__file__), 'xgboost_model.pkl'))
+
 
 async def do_prediction(df: pd.DataFrame) -> list[float]:
-    proba = predict_new_sample(model, df, train_median, feature_columns)
-    # print(f"""
-    # 预测结果：
-    # - 阴性概率：{proba[0]:.1%}
-    # - 阳性概率：{proba[1]:.1%}
-    # """)
-    return proba
+    df = pl.from_dict(data)
+    missing_features = set(X_train.columns) - set(df.columns)
+    for feat in missing_features:
+        df = df.with_columns(pl.lit(0).alias(
+            feat))  # Use Polars' `with_columns` <button class="citation-flag" data-index="5"><button class="citation-flag" data-index="6">
+
+    probabilities = model.predict_proba(df)  # <button class="citation-flag" data-index="8">
+    return probabilities
+
 
 if __name__ == '__main__':
     # 执行预测
-    data = {"SEX":"0","AGE":"1","ACC":"0","HRV":"1","HRV_TIME":"11:11","HRV_HOURS":"2","CPT_II":"999","ADHD":"1","ADD":"1","BIPOLAR":"9","UNIPOLAR":"9","ANXIETY":"1","SUBSTANCE":"9","OTHER":"0","CT":"9","MDQ_POS":"0","WURS":"98","ASRS":"5","MADRS":"11","HADS_A":"10","HADS_D":"10","MED":"1"}
+    data = {"SEX": "0", "AGE": "1", "ACC": "0", "HRV": "1", "HRV_TIME": "11:11", "HRV_HOURS": "2", "CPT_II": "999",
+            "ADHD": "1", "ADD": "1", "BIPOLAR": "9", "UNIPOLAR": "9", "ANXIETY": "1", "SUBSTANCE": "9", "OTHER": "0",
+            "CT": "9", "MDQ_POS": "0", "WURS": "98", "ASRS": "5", "MADRS": "11", "HADS_A": "10", "HADS_D": "10",
+            "MED": "1"}
     row = pd.DataFrame([data])
-    proba = predict_new_sample(model, row, train_median, feature_columns)
-
-    print(f"""
-    预测结果：
-    - 阴性概率：{proba[0]:.1%}
-    - 阳性概率：{proba[1]:.1%}
-    """)
+    import asyncio
+    proba = asyncio.run(do_prediction(row))
+    print(proba)
