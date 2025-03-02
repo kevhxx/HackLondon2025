@@ -1,6 +1,7 @@
 import polars as pl
 import pandas as pd
 from tsfresh.feature_selection.selection import select_features
+import cloudpickle
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -13,6 +14,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.exceptions import NotFittedError
 
+
 # --- Helper Functions ---
 
 def cyclical_time_encoding_polars(df: pl.DataFrame) -> pl.DataFrame:
@@ -24,10 +26,10 @@ def cyclical_time_encoding_polars(df: pl.DataFrame) -> pl.DataFrame:
             ).alias("time_parts"),
         )
         .with_columns(
-            (pl.col("time_parts").list.get(0)*3600 
-             + pl.col("time_parts").list.get(1)*60 
+            (pl.col("time_parts").list.get(0) * 3600
+             + pl.col("time_parts").list.get(1) * 60
              + pl.col("time_parts").list.get(2)
-            ).alias("total_seconds")
+             ).alias("total_seconds")
         )
         .with_columns(
             (2 * np.pi * pl.col("total_seconds") / 86400).alias("radians")
@@ -38,6 +40,7 @@ def cyclical_time_encoding_polars(df: pl.DataFrame) -> pl.DataFrame:
         )
         .drop(["time_parts", "total_seconds", "radians", "ACC_TIME"])
     )
+
 
 def align_polars_data(X: pl.DataFrame, y: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Align Polars DataFrames by common IDs."""
@@ -54,6 +57,7 @@ def align_polars_data(X: pl.DataFrame, y: pl.DataFrame) -> tuple[pl.DataFrame, p
         y.join(common_ids, on="ID").sort("ID")
     )
 
+
 def safe_align_index(X, y):
     """Safely align indices of X and y DataFrames."""
     if X.index.equals(y.index):
@@ -67,6 +71,7 @@ def safe_align_index(X, y):
         y = y.reset_index(drop=True)
         print("Warning: Unable to align indices, resetting indices.")
     return X, y
+
 
 # --- Custom Feature Selector ---
 
@@ -115,7 +120,8 @@ class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
             en.fit(X, y)
             self.secondary_mask_ = en.coef_ != 0
             if np.sum(self.secondary_mask_) < self.min_features:
-                print(f"Secondary selection yielded too few features ({np.sum(self.secondary_mask_)}), using top importance.")
+                print(
+                    f"Secondary selection yielded too few features ({np.sum(self.secondary_mask_)}), using top importance.")
                 top_idx = np.argsort(np.abs(en.coef_))[::-1][:self.min_features]
                 self.secondary_mask_ = np.zeros_like(en.coef_, dtype=bool)
                 self.secondary_mask_[top_idx] = True
@@ -143,6 +149,7 @@ class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
     def get_feature_names(self):
         return [col for col, mask in zip(self.primary_cols_, self.secondary_mask_) if mask]
 
+
 # --- Pipeline and Prediction Functions ---
 
 def create_SMOTE_pipeline():
@@ -152,6 +159,7 @@ def create_SMOTE_pipeline():
         ('smote', SMOTE(sampling_strategy=0.5, k_neighbors=3, random_state=42)),
         ('classifier', HistGradientBoostingClassifier())
     ])
+
 
 def predict_new_sample(model, user_input_df, train_median, feature_columns):
     """Predict probabilities for a new sample."""
@@ -168,14 +176,16 @@ def predict_new_sample(model, user_input_df, train_median, feature_columns):
         print(f"Prediction failed: {str(e)}")
         return None
 
+
 # --- Main Execution ---
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()  # Ensure multiprocessing compatibility
 
     # Load data
-    features = pl.read_csv("data/features_processed1.csv")
-    patient_info = pl.read_csv("data/patient_info_processed.csv", ignore_errors=True)
+    # features = pl.read_csv("data/features_processed1.csv")
+    features = pl.read_csv("/Users/tingzhanghuang/Documents/self-effort/STAY/HackLondon2025/data/features_processed1.csv", ignore_errors=True)
+    patient_info = pl.read_csv("/Users/tingzhanghuang/Documents/self-effort/STAY/HackLondon2025/data/patient_info_processed.csv", ignore_errors=True)
 
     # Data preprocessing
     features_ids = features["ID"].unique().to_list()
@@ -212,7 +222,7 @@ if __name__ == '__main__':
     if len(missing_cols) > 0:
         print(f"Dropping columns with high missing rates: {missing_cols.tolist()}")
         dataX_pd = dataX_pd.drop(columns=missing_cols)
-    
+
     X_train_raw, X_test_raw, y_train, y_test = train_test_split(
         dataX_pd, dataY_pd,
         test_size=0.2,
@@ -227,12 +237,18 @@ if __name__ == '__main__':
     model = create_SMOTE_pipeline()
     model.fit(X_train_raw, y_train)
 
-    # Save the model
-    joblib.dump({
-        'model': model,
-        'train_median': X_train_raw.median(),
-        'feature_columns': X_train_raw.columns
-    }, 'trained_model.pkl')
+    # # Save the model
+    # joblib.dump({
+    #     'model': model,
+    #     'train_median': X_train_raw.median(),
+    #     'feature_columns': X_train_raw.columns
+    # }, 'trained_model.pkl')
+    with open('trained_model.pkl', 'wb') as f:
+        cloudpickle.dump({
+            'model': model,
+            'train_median': X_train_raw.median(),
+            'feature_columns': X_train_raw.columns.tolist()
+        }, f)
 
     # Load the model
     saved_data = joblib.load('trained_model.pkl')
@@ -249,9 +265,10 @@ if __name__ == '__main__':
         'MED_Moodstab', 'MED_Antipsych', 'MED_Anxiety_Benzo', 'MED_Sleep',
         'MED_Analgesics_Opioids', 'MED_Stimulants', 'filter_$'
     ]
-    df = pd.read_csv('patient_info_processed.csv', usecols=columns)
-    row = df[df['ID'] == 9]
-    
+    df = pd.read_csv('../../patient_info_processed.csv', usecols=columns)
+    # row = df[df['ID'] == 1]
+    data = {"SEX":"0","AGE":"1","ACC":"N","HRV":"Y","HRV_TIME":"11:11","HRV_HOURS":"2","CPT_II":"9","ADHD":"1","ADD":"1","BIPOLAR":"9","UNIPOLAR":"9","ANXIETY":"1","SUBSTANCE":"9","OTHER":"0","CT":"9","MDQ_POS":"0","WURS":"98","ASRS":"5","MADRS":"11","HADS_A":"10","HADS_D":"10","MED":"N"}
+    row = pd.DataFrame([data])
     proba = predict_new_sample(model, row, train_median, feature_columns)
 
     print(f"""

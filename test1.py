@@ -7,10 +7,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 import numpy as np
-from sklearn.linear_model import LogisticRegression  
-from sklearn.model_selection import GridSearchCV  
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
-from sklearn.feature_selection import SelectFdr, f_classif 
+from sklearn.feature_selection import SelectFdr, f_classif
 import multiprocessing
 
 # Load data with proper decimal handling (for European-style CSV)
@@ -42,6 +42,7 @@ data_hrv0 = (
 dataX_hrv0 = data_hrv0.select(pl.exclude(["ADHD", "HRV_TIME", "HRV"]))
 dataY_hrv0 = data_hrv0.select(["ID", "ADHD"])
 
+
 # 时间编码函数（保持不变）
 def cyclical_time_encoding_polars(df: pl.DataFrame) -> pl.DataFrame:
     return (
@@ -51,10 +52,10 @@ def cyclical_time_encoding_polars(df: pl.DataFrame) -> pl.DataFrame:
             ).alias("time_parts"),
         )
         .with_columns(
-            (pl.col("time_parts").list.get(0)*3600 
-             + pl.col("time_parts").list.get(1)*60 
+            (pl.col("time_parts").list.get(0) * 3600
+             + pl.col("time_parts").list.get(1) * 60
              + pl.col("time_parts").list.get(2)
-            ).alias("total_seconds")
+             ).alias("total_seconds")
         )
         .with_columns(
             (2 * np.pi * pl.col("total_seconds") / 86400).alias("radians")
@@ -66,7 +67,9 @@ def cyclical_time_encoding_polars(df: pl.DataFrame) -> pl.DataFrame:
         .drop(["time_parts", "total_seconds", "radians", "ACC_TIME"])
     )
 
+
 dataX_hrv0 = cyclical_time_encoding_polars(dataX_hrv0)
+
 
 # 索引对齐函数（确保类型一致性）
 def align_polars_data(X: pl.DataFrame, y: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
@@ -74,7 +77,7 @@ def align_polars_data(X: pl.DataFrame, y: pl.DataFrame) -> tuple[pl.DataFrame, p
     # 统一类型
     X = X.with_columns(pl.col("ID").cast(pl.Utf8))
     y = y.with_columns(pl.col("ID").cast(pl.Utf8))
-    
+
     # 获取共同 ID
     common_ids = (
         X.select("ID")
@@ -86,6 +89,7 @@ def align_polars_data(X: pl.DataFrame, y: pl.DataFrame) -> tuple[pl.DataFrame, p
         X.join(common_ids, on="ID").sort("ID"),
         y.join(common_ids, on="ID").sort("ID")
     )
+
 
 dataX_hrv0, dataY_hrv0 = align_polars_data(dataX_hrv0, dataY_hrv0)
 
@@ -120,29 +124,30 @@ import pandas as pd
 import numpy as np
 import shap
 
+
 # ===================== 修复特征选择器 =====================
 class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
-    def __init__(self, fdr_levels = 0.3, min_features=5, alpha=0.01, max_iter=20000):
+    def __init__(self, fdr_levels=0.3, min_features=5, alpha=0.01, max_iter=20000):
         self.fdr_levels = fdr_levels
         self.min_features = max(min_features, 3)
         self.alpha = alpha
         self.max_iter = max_iter
-        self.primary_cols_ = []    # 首次选择的列名
-        self.primary_idx_ = []     # 首次选择的列索引
+        self.primary_cols_ = []  # 首次选择的列名
+        self.primary_idx_ = []  # 首次选择的列索引
         self.secondary_mask_ = []  # 二次选择的布尔掩码
-        self.scaler_ = None        # 需要初始化scaler_
+        self.scaler_ = None  # 需要初始化scaler_
 
     def fit(self, X, y):
         # 初始特征选择
         self._primary_selection(X, y)  # 修正方法名
-        
+
         # 准备二次选择数据
         X_primary = self._get_primary_features(X)
-        
+
         # 标准化处理
         self.scaler_ = StandardScaler().fit(X_primary)
         X_scaled = self.scaler_.transform(X_primary)
-        
+
         # 二次特征选择
         self._secondary_selection(X_scaled, y)
         return self
@@ -151,7 +156,7 @@ class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
         """初次特征选择（FDR/方差）"""
         # 统一使用正确的属性名
         self.primary_cols_ = []
-        
+
         if hasattr(X, 'columns'):
             df_X = X
         else:
@@ -163,17 +168,17 @@ class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
             X_selected = select_features(df_X, y, fdr_level=fdr)
             print(X_selected)
             if len(X_selected.columns) >= self.min_features:
-                    self.primary_cols_ = X_selected.columns.tolist()
+                self.primary_cols_ = X_selected.columns.tolist()
         except Exception as e:
-                print(f"FDR {fdr} 失败: {str(e)}")
-        
+            print(f"FDR {fdr} 失败: {str(e)}")
+
         # 保底策略
         if not self.primary_cols_:
             print("启用方差保底选择")
             variances = np.var(df_X, axis=0)
             selected_idx = np.argsort(variances)[-self.min_features:]
             self.primary_cols_ = df_X.columns[selected_idx].tolist()
-        
+
         # 记录列索引
         self.primary_idx_ = [df_X.columns.get_loc(col) for col in self.primary_cols_]
 
@@ -188,14 +193,14 @@ class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
             )
             en.fit(X, y)
             self.secondary_mask_ = en.coef_ != 0
-            
+
             # 保底机制
             if np.sum(self.secondary_mask_) < self.min_features:
                 print(f"二次选择特征不足({np.sum(self.secondary_mask_)}个)，启用重要性排序")
                 top_idx = np.argsort(np.abs(en.coef_))[::-1][:self.min_features]
                 self.secondary_mask_ = np.zeros_like(en.coef_, dtype=bool)
                 self.secondary_mask_[top_idx] = True
-                
+
         except Exception as e:
             print(f"模型选择失败: {str(e)}, 使用全部初选特征")
             self.secondary_mask_ = np.ones(X.shape[1], dtype=bool)
@@ -203,22 +208,21 @@ class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
     def transform(self, X):
         # 获取首次选择特征
         X_primary = self._get_primary_features(X)
-        
+
         # 标准化
         if self.scaler_ is None:
             raise NotFittedError("需要先调用fit方法")
         X_scaled = self.scaler_.transform(X_primary)
-        
+
         # 应用二次选择
         X_final = X_scaled[:, self.secondary_mask_]
-        
+
         # 最终维度验证
         if X_final.shape[1] == 0:
             raise ValueError("最终特征数量为0，请检查选择参数")
-        
+
         assert X_final.shape[1] == len(self.get_feature_names()), "特征维度不匹配"
 
-            
         return X_final
 
     def _get_primary_features(self, X):
@@ -235,19 +239,22 @@ class EnhancedFeatureSelector(BaseEstimator, TransformerMixin):
 
     def set_params(self, **params):
         if 'fdr_levels' in params:
-            params['fdr_levels'] = tuple(params['fdr_levels']) if isinstance(params['fdr_levels'], list) else params['fdr_levels']
+            params['fdr_levels'] = tuple(params['fdr_levels']) if isinstance(params['fdr_levels'], list) else params[
+                'fdr_levels']
         for key, value in params.items():
             setattr(self, key, value)
         return self
-    
+
     def get_feature_names(self):
         """获取最终选择的特征名称"""
         return [col for col, mask in zip(self.primary_cols_, self.secondary_mask_) if mask]
 
-# ===================== 数据准备 ===================== 
+
+# ===================== 数据准备 =====================
 # 转换时保留原始数据副本
 raw_dataX = dataX_hrv0.to_pandas().copy()
 raw_dataY = dataY_hrv0.to_pandas()["ADHD"].copy()
+
 
 # 索引对齐增强版
 def safe_align_index(X, y):
@@ -255,7 +262,7 @@ def safe_align_index(X, y):
     # 第一层校验：索引完全匹配
     if X.index.equals(y.index):
         return X, y
-    
+
     # 第二层校验：ID列匹配
     if 'ID' in X.columns and 'ID' in y.columns:
         common_ids = np.intersect1d(X['ID'], y['ID'])
@@ -266,7 +273,7 @@ def safe_align_index(X, y):
         X = X.reset_index(drop=True)
         y = y.reset_index(drop=True)
         print("警告：无法对齐索引，已重置索引")
-    
+
     return X, y
 
 
@@ -305,7 +312,6 @@ print(f"训练集正样本比例: {y_temp.mean():.1%} | 测试集正样本比例
 X_train_raw = X_train_raw.astype(np.float64)
 X_test_raw = X_test_raw.astype(np.float64)
 
-
 X_train_raw, X_test_raw, y_train, y_test = train_test_split(
     dataX_pd, dataY_pd,
     test_size=0.2,
@@ -337,8 +343,8 @@ if n_positive < 5:
     scoring = make_scorer(roc_auc_score, needs_proba=True)  # 修正3：需要概率预测
     model_config = {
         **base_params,
-        'max_depth': 2,              # 限制树深
-        'min_samples_leaf': 20       # 防止过拟合
+        'max_depth': 2,  # 限制树深
+        'min_samples_leaf': 20  # 防止过拟合
     }
 else:
     scoring = make_scorer(balanced_accuracy_score)
@@ -346,40 +352,42 @@ else:
         **base_params,
         'learning_rate': 0.05,
         'max_depth': 3,
-        'class_weight': None,        # 修正4：HistGradientBoosting无此参数
-        'l2_regularization': 0.1     # 改用正确的正则化参数
+        'class_weight': None,  # 修正4：HistGradientBoosting无此参数
+        'l2_regularization': 0.1  # 改用正确的正则化参数
     }
 
 # 安全邻居数最终校验（修正5）
 safe_n_neighbors = min(safe_n_neighbors, n_positive - 1) if n_positive > 1 else 0
 
+
 # ===================== 管道构建 =====================
 def create_SMOTE_pipeline():
     return Pipeline([
-    ('feature_selector', EnhancedFeatureSelector()),
-    ('smote', SMOTE(
-        sampling_strategy=0.5,  # 将少数类扩至多数类的50%
-        k_neighbors=3,          # 降低k值适应小样本
-        random_state=42
-    )),
-    ('classifier', HistGradientBoostingClassifier())
-])
+        ('feature_selector', EnhancedFeatureSelector()),
+        ('smote', SMOTE(
+            sampling_strategy=0.5,  # 将少数类扩至多数类的50%
+            k_neighbors=3,  # 降低k值适应小样本
+            random_state=42
+        )),
+        ('classifier', HistGradientBoostingClassifier())
+    ])
+
 
 model = create_SMOTE_pipeline()
 
- # 全量训练
+# 全量训练
 model.fit(X_train_raw, y_train)
-    
-    # 测试评估
+
+# 测试评估
 test_proba = model.predict_proba(X_test_raw)[:, 1]
 test_auc = roc_auc_score(y_test, test_proba)
-    
-    # 结果展示
+
+# 结果展示
 print(f"""
     [模型报告]
     测试集AUC: {test_auc:.3f}
     SMOTE参数: k_neighbors={model.named_steps['smote'].k_neighbors}
-    """)    
+    """)
 
 import joblib
 
@@ -388,10 +396,10 @@ joblib.dump({
     'model': model,
     'train_median': X_train_raw.median(),
     'feature_columns': X_train_raw.columns
-}, 'trained_model.pkl')
+}, 'src/utils/trained_model.pkl')
 
 # 加载保存的模型
-saved_data = joblib.load('trained_model.pkl')
+saved_data = joblib.load('src/utils/trained_model.pkl')
 model = saved_data['model']
 train_median = saved_data['train_median']
 feature_columns = saved_data['feature_columns']
@@ -400,21 +408,22 @@ feature_columns = saved_data['feature_columns']
 
 # If you want to specifically select only these columns
 columns = [
-    'ID', 'SEX', 'AGE', 'ACC', 'ACC_DAYS', 
-    'HRV_HOURS', 'CPT_II', 'ADD', 'BIPOLAR', 'UNIPOLAR', 
-    'ANXIETY', 'SUBSTANCE', 'OTHER', 'CT', 'MDQ_POS', 'WURS', 
-    'ASRS', 'MADRS', 'HADS_A', 'HADS_D', 'MED', 'MED_Antidepr', 
-    'MED_Moodstab', 'MED_Antipsych', 'MED_Anxiety_Benzo', 'MED_Sleep', 
+    'ID', 'SEX', 'AGE', 'ACC', 'ACC_DAYS',
+    'HRV_HOURS', 'CPT_II', 'ADD', 'BIPOLAR', 'UNIPOLAR',
+    'ANXIETY', 'SUBSTANCE', 'OTHER', 'CT', 'MDQ_POS', 'WURS',
+    'ASRS', 'MADRS', 'HADS_A', 'HADS_D', 'MED', 'MED_Antidepr',
+    'MED_Moodstab', 'MED_Antipsych', 'MED_Anxiety_Benzo', 'MED_Sleep',
     'MED_Analgesics_Opioids', 'MED_Stimulants', 'filter_$'
 ]
 
 multiprocessing.freeze_support()
 
 # Read CSV with specific columns
-df = pd.read_csv('data/patient_info_processed.csv', usecols=columns)
+df = pd.read_csv('src/utils/data/patient_info_processed.csv', usecols=columns)
 row = df[df['ID'] == 7]
 
 print(row)
+
 
 def predict_new_sample(model, user_input_df, train_median, feature_columns):
     """
@@ -428,20 +437,19 @@ def predict_new_sample(model, user_input_df, train_median, feature_columns):
     - 预测概率（格式：[阴性概率, 阳性概率]）
     - 特征重要性（SHAP值）
     """
-    
     # 1. 数据对齐
     # 确保输入包含所有训练时的特征列
     aligned_df = pd.DataFrame(columns=feature_columns)
     for col in user_input_df.columns:
         if col in feature_columns:
             aligned_df[col] = user_input_df[col]
-    
+
     # 2. 缺失值填充
     filled_df = aligned_df.fillna(train_median)
-    
+
     # 3. 数据类型转换
     processed_data = filled_df.astype(np.float64)
-    
+
     # 4. 执行预测
     try:
         proba = model.predict_proba(processed_data)[0]
@@ -449,6 +457,7 @@ def predict_new_sample(model, user_input_df, train_median, feature_columns):
     except Exception as e:
         print(f"预测失败: {str(e)}")
         return None, None
+
 
 # 执行预测
 proba = predict_new_sample(model, row, train_median, feature_columns)
