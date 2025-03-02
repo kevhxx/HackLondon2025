@@ -84,8 +84,8 @@ async def process_data(input_data: InputData):
 
     # 定义所需的列
     columns = [
-        'ID', 'SEX', 'AGE', 'ACC', 'ACC_DAYS',
-        'HRV_HOURS', 'CPT_II', 'ADD', 'BIPOLAR', 'UNIPOLAR',
+        'SEX', 'AGE', 'ACC', 'ACC_DAYS', 'HRV', 'HRV_HOURS'
+        'CPT_II', 'ADD', 'BIPOLAR', 'UNIPOLAR',
         'ANXIETY', 'SUBSTANCE', 'OTHER', 'CT', 'MDQ_POS', 'WURS',
         'ASRS', 'MADRS', 'HADS_A', 'HADS_D', 'MED', 'MED_Antidepr',
         'MED_Moodstab', 'MED_Antipsych', 'MED_Anxiety_Benzo', 'MED_Sleep',

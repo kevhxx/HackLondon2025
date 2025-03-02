@@ -14,8 +14,8 @@ from sklearn.feature_selection import SelectFdr, f_classif
 import multiprocessing
 
 # Load data with proper decimal handling (for European-style CSV)
-features = pl.read_csv("data/features_processed1.csv")
-patient_info = pl.read_csv("data/patient_info_processed.csv", ignore_errors=True)
+features = pl.read_csv("src/utils/data/features_processed1.csv")
+patient_info = pl.read_csv("src/utils/data/patient_info_processed.csv", ignore_errors=True)
 
 # 打印两个文件的 ID 差异
 features_ids = features["ID"].unique().to_list()
@@ -365,7 +365,7 @@ def create_SMOTE_pipeline():
     return Pipeline([
         ('feature_selector', EnhancedFeatureSelector()),
         ('smote', SMOTE(
-            sampling_strategy=0.5,  # 将少数类扩至多数类的50%
+            sampling_strategy=1,  # 将少数类扩至多数类的50%
             k_neighbors=3,  # 降低k值适应小样本
             random_state=42
         )),
