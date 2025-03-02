@@ -26,11 +26,11 @@ multiprocessing.freeze_support()
 
 # Read CSV with specific columns
 # os.getcwd() 的上一层目录的 data/patient_info_processed.csv
-if __name__ == '__main__':
-    df = pd.read_csv("/src/utils/data/patient_info_processed.csv", usecols=columns)
-else:
-    df = pd.read_csv(os.path.join(os.getcwd(), 'src/utils', 'data', 'patient_info_processed.csv'), usecols=columns)
-row = df[df['ID'] == 7]
+# if __name__ == '__main__':
+#     df = pd.read_csv("/src/utils/data/patient_info_processed.csv", usecols=columns)
+# else:
+#     df = pd.read_csv(os.path.join(os.getcwd(), 'src/utils', 'data', 'patient_info_processed.csv'), usecols=columns)
+# row = df[df['ID'] == 7]
 
 
 # def predict_new_sample(model, user_input_df, train_median, feature_columns):

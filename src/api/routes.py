@@ -116,7 +116,7 @@ async def process_data(input_data: InputData):
 async def process_data(request: Request):
     """
     处理输入数据
-    :param result:
+    :param request:
     :return:
     """
     try:
