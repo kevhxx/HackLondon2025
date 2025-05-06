@@ -55,7 +55,7 @@ async def generate_advice(asrs_results: str):
                 class AdviceResponse(BaseModel):
                     recommendations: List[Suggestion]
                     study_plan: StudyPlanSuggestion
-=
+
                 Please limit the overall length of the content to 500 words. Ensure that the advice is clear, actionable, and tailored to the individual's responses.
                 
                 reply lang: en-us
